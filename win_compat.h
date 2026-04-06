@@ -2,4 +2,4 @@
 
 #include <stdlib.h>
 
-static char *dup_env_value(const char *name);
+char *dup_env_value(const char *name);

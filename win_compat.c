@@ -1,6 +1,6 @@
 #include "win_compat.h"
 
-static char *dup_env_value(const char *name)
+char *dup_env_value(const char *name)
 {
   char *value = NULL;
   size_t len = 0;
