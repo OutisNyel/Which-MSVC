@@ -36,6 +36,10 @@ char *tilde_expand(const char *string);
 #define PATH_MAX MAX_PATH
 #endif /* WIN32 */
 
+#ifndef VERSION
+#define VERSION "2.23"
+#endif
+
 static const char *progname;
 
 #ifdef _WIN32
