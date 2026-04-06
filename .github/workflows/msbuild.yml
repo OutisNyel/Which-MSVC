@@ -1,0 +1,58 @@
+name: MSBuild CI
+
+on:
+  push:
+    branches: ["master"]
+  pull_request:
+    branches: ["master"]
+  workflow_dispatch:
+
+env:
+  PROJECT_FILE_PATH: .\Which-MSVC\Which-MSVC.vcxproj
+  BUILD_CONFIGURATION: Release
+  BUILD_TOOLSET: v143
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [Win32, x64]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Add MSBuild to PATH
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Build
+        shell: pwsh
+        run: |
+          msbuild ${{ env.PROJECT_FILE_PATH }} `
+            /m `
+            /t:Build `
+            /p:Configuration=${{ env.BUILD_CONFIGURATION }} `
+            /p:Platform=${{ matrix.platform }} `
+            /p:PlatformToolset=${{ env.BUILD_TOOLSET }} `
+            /p:OutDir=${{ github.workspace }}\out\${{ matrix.platform }}\Release\
+
+      - name: Verify executable
+        shell: pwsh
+        run: |
+          $exePath = Join-Path "${{ github.workspace }}" "out\${{ matrix.platform }}\Release\which.exe"
+          if (!(Test-Path -LiteralPath $exePath)) {
+            throw "Build output not found: $exePath"
+          }
+          & $exePath --version
+
+      - name: Upload CI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ci-${{ matrix.platform }}
+          path: out/${{ matrix.platform }}/Release/which.exe
+          if-no-files-found: error
