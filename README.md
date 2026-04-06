@@ -1,47 +1,67 @@
-Install
-=======
+# Which-MSVC
 
-For official release sources you will need an ANSI C compiler (like gcc) to compile this package.
+Windows/MSVC-friendly build of GNU `which`.
 
-Just type `make`, followed by `make install`.  See [INSTALL](INSTALL) for more details.
+This repository keeps the original C sources and adds a Visual Studio
+project so you can build `which` directly on Windows.
 
-For git clones you will need to follow some basic maintainer instructions at the bottom for first time compiles.
+## What This Program Does
 
+`which` prints the full path of commands found in `PATH`.
 
-History
-=======
+Compared with very old `which` variants, this codebase keeps GNU behavior,
+including options like:
 
-The main difference with version 1.0 by Paul Vixie is that this
-version will not return directory names as being executables
-and that by default it will expand a leading "./" and "~/" to
-its full path on output.
+- `--all` / `-a`
+- `--read-alias` / `-i`
+- `--read-functions`
 
-The -all option has been added in example of a version of which
-on Ultrix.  They use `-a' as option.
+## Build (Visual Studio)
 
-The --read-alias idea has been copied from a version of which by
-Maarten Litmaath called `which-v6', he was using `-i' as option
-which stands for `interactive'.
+### Option 1: IDE
 
+1. Open `Which-MSVC.slnx`.
+2. Select configuration (`Debug|x64` or `Release|x64`).
+3. Build project `Which-MSVC`.
 
-Manual page
-===========
+### Option 2: Command Line
 
-See the [man page](MAN.md) for more details.
+Run in a Developer PowerShell / Developer Command Prompt:
 
+```powershell
+msbuild .\Which-MSVC\Which-MSVC.vcxproj /t:Build /p:Configuration=Debug /p:Platform=x64
+```
 
-Maintainer Instructions
-=======================
-   If you are not using the release sources but are using the git
-sources directly there are a couple extra steps to compile.
+For release:
 
-   Make sure you have all the git submodules installed by running
-git submodule update --init --recursive
-in the root of the project.
+```powershell
+msbuild .\Which-MSVC\Which-MSVC.vcxproj /t:Build /p:Configuration=Release /p:Platform=x64
+```
 
-   Next run `./autogen.sh` in the which root to generate the
-install scripts.
+## Quick Check
 
-   You must run configure with `--enable-maintainer-mode` the first time
-in order to generate the man file when you first run make, otherwise
-make will not succeed.
+After build, run:
+
+```powershell
+.\x64\Debug\which.exe --version
+.\x64\Debug\which.exe cmd
+.\x64\Debug\which.exe where
+```
+
+## Repository Layout
+
+- `which.c` - main program and option handling.
+- `bash.c`, `tilde.c` - path/tilde/function lookup helpers.
+- `getopt.c`, `getopt1.c` - GNU getopt implementation.
+- `sys.h` - platform compatibility macros.
+- `win_compat.c`, `win_compat.h` - Windows helper functions.
+- `Which-MSVC/Which-MSVC.vcxproj` - Visual Studio project file.
+
+## Notes
+
+- This project targets Windows and keeps `CharacterSet=Unicode` in VS config.
+- Internally, compatibility code uses Win32 `A` APIs where needed for `char *` logic.
+
+## License
+
+See `COPYING` for the full license text.
