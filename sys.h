@@ -48,6 +48,8 @@ extern void *xrealloc(void *ptr, size_t size);
 #ifndef HAVE_GETCWD
 #ifdef HAVE_GETWD
 #define getcwd(a, b) getwd(a)
+#elif defined(_WIN32)
+/* Windows maps getcwd to _getcwd later in this header. */
 #else
 #error "You either need getcwd(3) or getwd(3)"
 #endif
@@ -60,6 +62,7 @@ extern void *xrealloc(void *ptr, size_t size);
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <ctype.h>
+#include <direct.h>
 
 #define stat _stati64
 #define getcwd _getcwd
