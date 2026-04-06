@@ -61,6 +61,14 @@ static void *xmalloc(), *xrealloc();
 // #  include "xmalloc.h"
 #endif /* TEST || STATIC_MALLOC */
 
+static char *tilde_savestring_impl(const char *src)
+{
+  size_t len = strlen(src) + 1;
+  char *dst = (char *) xmalloc(len);
+  memcpy(dst, src, len);
+  return dst;
+}
+
 #if !defined(HAVE_GETPW_DECLS)
 #if defined(HAVE_GETPWUID)
 extern struct passwd *getpwuid(uid_t);
@@ -71,7 +79,7 @@ extern struct passwd *getpwnam(const char *);
 #endif /* !HAVE_GETPW_DECLS */
 
 #if !defined(savestring)
-#define savestring(x) strcpy((char *) xmalloc(1 + strlen(x)), (x))
+#define savestring(x) tilde_savestring_impl((x))
 #endif /* !savestring */
 
 #if !defined(NULL)
@@ -208,7 +216,7 @@ char *tilde_expand(const char *string)
     if ((result_index + start + 1) > result_size)
       result = (char *) xrealloc(result, 1 + (result_size += (start + 20)));
 
-    strncpy(result + result_index, string, start);
+    memcpy(result + result_index, string, start);
     result_index += start;
 
     /* Advance STRING to the starting tilde. */
@@ -224,7 +232,7 @@ char *tilde_expand(const char *string)
 
     /* Expand the entire tilde word, and copy it into RESULT. */
     tilde_word = (char *) xmalloc(1 + end);
-    strncpy(tilde_word, string, end);
+    memcpy(tilde_word, string, end);
     tilde_word[end] = '\0';
     string += end;
 
@@ -245,7 +253,7 @@ char *tilde_expand(const char *string)
       if ((result_index + len + 1) > result_size)
         result = (char *) xrealloc(result, 1 + (result_size += (len + 20)));
 
-      strcpy(result + result_index, expansion);
+      memcpy(result + result_index, expansion, len);
       result_index += len;
     }
     free(expansion);
@@ -315,8 +323,8 @@ static char *glue_prefix_and_suffix(char *prefix, const char *suffix, int suffin
   slen = strlen(suffix + suffind);
   ret = (char *) xmalloc(plen + slen + 1);
   if (plen)
-    strcpy(ret, prefix);
-  strcpy(ret + plen, suffix + suffind);
+    memcpy(ret, prefix, plen);
+  memcpy(ret + plen, suffix + suffind, slen + 1);
   return ret;
 }
 
@@ -397,12 +405,13 @@ char *tilde_expand_word(const char *filename)
       DWORD size = MAX_PATH;
       if (GetProfilesDirectoryA(profile_dir, &size))
       {
-        if ((strlen(profile_dir) + strlen(username)) < (MAX_PATH - 1))
+        size_t profile_len = strlen(profile_dir);
+        size_t username_len = strlen(username);
+        if ((profile_len + username_len) < (MAX_PATH - 1))
         {
-          profile_dir[strlen(profile_dir) + 1] = 0;
-          profile_dir[strlen(profile_dir)] = DIR_SEPARATOR;
-
-          strcat(profile_dir, username);
+          profile_dir[profile_len + 1] = 0;
+          profile_dir[profile_len] = DIR_SEPARATOR;
+          memcpy(profile_dir + profile_len + 1, username, username_len + 1);
           dirname = savestring(profile_dir);
         }
       }

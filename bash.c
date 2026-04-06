@@ -29,6 +29,7 @@
 #else
 #include <windows.h>
 #include <shlobj_core.h>
+#include <stdlib.h>
 #endif
 #include "bash.h"
 
@@ -58,6 +59,10 @@ int eaccess(const char *pathname, int mode);
  * - exported functions needed in which.c
  */
 static char *extract_colon_unit(char const *string, int *p_index);
+
+#ifdef _WIN32
+#include "win_compat.h"
+#endif
 
 /*===========================================================================
  *
@@ -463,10 +468,10 @@ char *make_full_pathname(const char *path, const char *name, int name_len)
 
   path_len = strlen(path);
   full_path = (char *) xmalloc(2 + path_len + name_len);
-  strcpy(full_path, path);
+  memcpy(full_path, path, path_len + 1);
   if (path_len > 0 && !IS_DIRSEP(full_path[path_len - 1]))
     full_path[path_len++] = DIR_SEPARATOR;
-  strcpy(full_path + path_len, name);
+  memcpy(full_path + path_len, name, name_len + 1);
   return (full_path);
 }
 #ifndef _WIN32
@@ -505,7 +510,17 @@ void get_current_user_info()
 /* This is present for use by the tilde library. */
 char *sh_get_env_value(const char *v)
 {
+#ifdef _WIN32
+  static char *cached_value = NULL;
+  char *value = dup_env_value(v);
+  if (value == NULL)
+    return NULL;
+  free(cached_value);
+  cached_value = value;
+  return cached_value;
+#else
   return getenv(v);
+#endif
 }
 #ifndef _WIN32
 char *sh_get_home_dir(void)
@@ -519,7 +534,7 @@ char *sh_get_home_dir(void)
 char *sh_get_home_dir(void)
 {
   char *home_dir = xmalloc(sizeof(char) * (MAX_PATH));
-  if (!SUCCEEDED(SHGetFolderPath(NULL, CSIDL_PROFILE, NULL, 0, home_dir)))
+  if (!SUCCEEDED(SHGetFolderPathA(NULL, CSIDL_PROFILE, NULL, 0, home_dir)))
   {
     free(home_dir);
     home_dir = NULL;

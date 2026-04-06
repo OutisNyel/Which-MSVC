@@ -63,6 +63,21 @@ extern void *xrealloc(void *ptr, size_t size);
 #include <sys/types.h>
 #include <ctype.h>
 #include <direct.h>
+#include <io.h>
+
+#ifndef _UID_T_DEFINED
+typedef unsigned int uid_t;
+#define _UID_T_DEFINED 1
+#endif
+
+#ifndef _GID_T_DEFINED
+typedef unsigned int gid_t;
+#define _GID_T_DEFINED 1
+#endif
+
+#ifndef GETGROUPS_T
+#define GETGROUPS_T gid_t
+#endif
 
 #define stat _stati64
 #define getcwd _getcwd
@@ -78,9 +93,9 @@ extern void *xrealloc(void *ptr, size_t size);
 #define IS_ABSOLUTE(n) (IS_SLASH((n)[0]) || HAVE_DRIVE(n))
 #define CONTAINS_SEPARATOR(n) (strchr(n, '/') != NULL || strchr(n, DIR_SEPARATOR) != NULL || HAVE_DRIVE(n))
 #define DEFAULT_HOMEDIR "C:\\"
-#define STRSTR stristr
-#define STRCMP stricmp
-#define STRNCMP strnicmp
+#define STRSTR _stristr
+#define STRCMP _stricmp
+#define STRNCMP _strnicmp
 #define CHAR_CMP(c1, c2) (tolower(c1) == tolower(c2))
 #else
 #define WIN32SYSTEM 0

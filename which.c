@@ -38,6 +38,10 @@ char *tilde_expand(const char *string);
 
 static const char *progname;
 
+#ifdef _WIN32
+#include "win_compat.h"
+#endif
+
 static void print_usage(FILE *out)
 {
   fprintf(out, "Usage: %s [options] [--] COMMAND [...]\n", progname);
@@ -107,14 +111,14 @@ static char *find_command_in_path(const char *name, const char *path_list, int *
     if (*name != '.' && !IS_ABSOLUTE(name) && *name != '~')
     {
       abs_path = (char *) xmalloc(3 + name_len);
-      strcpy(abs_path, "./");
+      memcpy(abs_path, "./", 3);
       abs_path[1] = DIR_SEPARATOR;
-      strcat(abs_path, name);
+      memcpy(abs_path + 2, name, name_len + 1);
     }
     else
     {
       abs_path = (char *) xmalloc(1 + name_len);
-      strcpy(abs_path, name);
+      memcpy(abs_path, name, name_len + 1);
     }
 
     path_list = abs_path;
@@ -171,23 +175,27 @@ static char *find_command_in_path(const char *name, const char *path_list, int *
 #ifdef _WIN32
     if (!found && !strrchr(name, '.'))
     {
-      LPTSTR PathExtStr, ext;
+      char *path_ext_str, *ext;
       char *namex, *lasts;
       int ext_len;
 
-      PathExtStr = strdup(getenv("PATHEXT"));
-      if (!PathExtStr)
-        PathExtStr = strdup(DEFAULT_PATHEXT);
-      ext = strtok_r(PathExtStr, PATHEXTSEPARATORS, &lasts);
+      path_ext_str = dup_env_value("PATHEXT");
+      if (!path_ext_str)
+        path_ext_str = strdup(DEFAULT_PATHEXT);
+      if (!path_ext_str)
+      {
+        free(path);
+        free(full_path);
+        break;
+      }
+      ext = strtok_r(path_ext_str, PATHEXTSEPARATORS, &lasts);
       while (ext)
       {
         free(full_path);
         ext_len = strlen(ext);
         namex = (char *) xmalloc(name_len + ext_len + 1);
-        if (!namex)
-          continue;
-        strcpy(namex, name);
-        strcat(namex, ext);
+        memcpy(namex, name, name_len);
+        memcpy(namex + name_len, ext, ext_len + 1);
         full_path = make_full_pathname(path, namex, name_len + ext_len);
         free(namex);
         status = file_status(full_path);
@@ -198,8 +206,8 @@ static char *find_command_in_path(const char *name, const char *path_list, int *
         }
         ext = strtok_r(NULL, PATHEXTSEPARATORS, &lasts);
       }
-      if (PathExtStr)
-        free(PathExtStr);
+      if (path_ext_str)
+        free(path_ext_str);
     }
 #endif
     free(path);
@@ -221,11 +229,27 @@ static void get_current_working_directory(void)
 
   if (!getcwd(cwd, sizeof(cwd) - 1))
   {
-    const char *pwd = getenv("PWD");
+#ifdef _WIN32
+    char *pwd = dup_env_value("PWD");
     if (pwd && strlen(pwd) < sizeof(cwd) - 1)
-      strcpy(cwd, pwd);
+    {
+      size_t pwd_len = strlen(pwd);
+      memcpy(cwd, pwd, pwd_len + 1);
+    }
     else
       cwd[0] = '\0';
+    if (pwd)
+      free(pwd);
+#else
+    const char *pwd = getenv("PWD");
+    if (pwd && strlen(pwd) < sizeof(cwd) - 1)
+    {
+      size_t pwd_len = strlen(pwd);
+      memcpy(cwd, pwd, pwd_len + 1);
+    }
+    else
+      cwd[0] = '\0';
+#endif
   }
 
   if (!IS_ABSOLUTE(cwd))
@@ -255,7 +279,7 @@ static char *path_clean_up(const char *path)
   if (!IS_ABSOLUTE(p1))
   {
     get_current_working_directory();
-    strcpy(result, cwd);
+    memcpy(result, cwd, cwdlen + 1);
     saw_slash = 1;
     p2 = &result[cwdlen];
   }
@@ -284,7 +308,11 @@ static char *path_clean_up(const char *path)
       {
         if (--p2 < result)
         {
-          strcpy(result, path);
+          size_t path_len = strlen(path);
+          if (path_len >= sizeof(result))
+            path_len = sizeof(result) - 1;
+          memcpy(result, path, path_len);
+          result[path_len] = '\0';
           return result;
         }
         if (IS_DIRSEP(*p2))
@@ -441,7 +469,7 @@ void process_alias(const char *str, int argc, char *argv[], const char *path_lis
         ++p, ++len;
 
       cmd = (char *) xmalloc(len + 1);
-      strncpy(cmd, &p[-len], len);
+      memcpy(cmd, &p[-len], len);
       cmd[len] = 0;
       if (*argv && !STRCMP(cmd, *argv))
         *argv = NULL;
@@ -486,7 +514,12 @@ static uid_t const superuser = 0;
 
 int main(int argc, char *argv[])
 {
-  char *path_list = getenv("PATH");
+  char *path_list;
+#ifdef _WIN32
+  char *path_env = dup_env_value("PATH");
+#else
+  path_list = getenv("PATH");
+#endif
   int short_option, fail_count = 0;
   static int long_option;
   struct option longopts[] = {{"help", 0, &long_option, opt_help},
@@ -505,13 +538,22 @@ int main(int argc, char *argv[])
 
   progname = argv[0];
 #ifdef _WIN32
-  path_list = (char *) malloc(2 + strlen(path_list) + 1);
+  size_t path_env_len = path_env ? strlen(path_env) : 0;
+  path_list = (char *) malloc(2 + path_env_len + 1);
+  if (!path_list)
+  {
+    fprintf(stderr, "%s: Out of memory\n", progname);
+    if (path_env)
+      free(path_env);
+    return -1;
+  }
   path_list[0] = '.';
   path_list[1] = PATH_SEPARATOR;
-  path_list[2] = '\0';
-  strcat(path_list, getenv("PATH"));
+  memcpy(path_list + 2, path_env ? path_env : "", path_env_len + 1);
+  if (path_env)
+    free(path_env);
   /* omit final ';' */
-  if (path_list[strlen(path_list) - 1] == PATH_SEPARATOR)
+  if (path_list[0] && path_list[strlen(path_list) - 1] == PATH_SEPARATOR)
     path_list[strlen(path_list) - 1] = '\0';
 #endif /* _WIN32 */
   while ((short_option = getopt_long(argc, argv, "aivV", longopts, NULL)) != -1)
@@ -574,12 +616,31 @@ int main(int argc, char *argv[])
   if (show_tilde || skip_tilde)
   {
     const char *h;
-
+#ifdef _WIN32
+    char *home_env = dup_env_value("HOME");
+    if (home_env)
+      h = home_env;
+    else
+      h = sh_get_home_dir();
+#else
     if (!(h = getenv("HOME")))
       h = sh_get_home_dir();
+#endif
 
-    strncpy(home, h, sizeof(home));
-    home[sizeof(home) - 1] = 0;
+    if (h)
+    {
+      size_t hlen = strlen(h);
+      if (hlen >= sizeof(home))
+        hlen = sizeof(home) - 1;
+      memcpy(home, h, hlen);
+      home[hlen] = '\0';
+    }
+    else
+      home[0] = '\0';
+#ifdef _WIN32
+    if (home_env)
+      free(home_env);
+#endif
     homelen = strlen(home);
     if (homelen == 0 || !IS_DIRSEP(home[homelen - 1]) && homelen < sizeof(home) - 1)
     {
@@ -664,7 +725,12 @@ int main(int argc, char *argv[])
           max_alias_count += 32;
           aliases = (char **) xrealloc(aliases, max_alias_count * sizeof(char *));
         }
-        aliases[alias_count++] = strcpy((char *) xmalloc(strlen(buf) + 1), buf);
+        {
+          size_t blen = strlen(buf);
+          char *alias_line = (char *) xmalloc(blen + 1);
+          memcpy(alias_line, buf, blen + 1);
+          aliases[alias_count++] = alias_line;
+        }
       }
       else if (read_functions && looks_like_function_start)
       {
@@ -694,7 +760,7 @@ int main(int argc, char *argv[])
         }
         function = &functions[func_count++];
         function->name = (char *) xmalloc(len + 1);
-        strncpy(function->name, &p[-len], len);
+        memcpy(function->name, &p[-len], len);
         function->name[len] = 0;
         function->len = len;
         max_line_count = 32;
@@ -703,7 +769,9 @@ int main(int argc, char *argv[])
         while (fgets(buf, sizeof(buf), stdin))
         {
           size_t blen = strlen(buf);
-          function->lines[function->line_count++] = strcpy((char *) xmalloc(blen + 1), buf);
+          char *line_copy = (char *) xmalloc(blen + 1);
+          memcpy(line_copy, buf, blen + 1);
+          function->lines[function->line_count++] = line_copy;
           if (!strcmp(buf, "}\n"))
             break;
           if (function->line_count == max_line_count)
