@@ -48,6 +48,13 @@ After build, run:
 .\x64\Debug\which.exe where
 ```
 
+## Usage
+
+1. Move `which.exe` to your preferred directory.
+2. Add that directory to your system `PATH`.
+3. Restart your terminal.
+4. Run which.
+
 ## Repository Layout
 
 - `which.c` - main program and option handling.
