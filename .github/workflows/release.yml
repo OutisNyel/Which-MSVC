@@ -8,6 +8,7 @@ on:
 env:
   PROJECT_FILE_PATH: .\Which-MSVC\Which-MSVC.vcxproj
   BUILD_CONFIGURATION: Release
+  BUILD_TOOLSET: v143
 
 permissions:
   contents: write
@@ -35,6 +36,7 @@ jobs:
             /t:Build `
             /p:Configuration=${{ env.BUILD_CONFIGURATION }} `
             /p:Platform=${{ matrix.platform }} `
+            /p:PlatformToolset=${{ env.BUILD_TOOLSET }} `
             /p:OutDir=${{ github.workspace }}\out\${{ matrix.platform }}\Release\
 
       - name: Package zip
